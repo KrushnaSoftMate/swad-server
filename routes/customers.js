@@ -81,11 +81,18 @@ router.delete('/:id', async (req, res) => {
 // POST mark payment
 router.post('/:id/payment', async (req, res) => {
   try {
-    const { amount, note } = req.body;
+    const { amount, note, monthKey } = req.body;
     if (!amount || amount <= 0) return res.status(400).json({ success: false, message: 'Invalid amount' });
     const customer = await Customer.findById(req.params.id);
     if (!customer) return res.status(404).json({ success: false, message: 'Customer not found' });
-    customer.paidExtra = (customer.paidExtra || 0) + amount;
+
+    if (monthKey) {
+      const current = customer.paidExtraByMonth.get(monthKey) || 0;
+      customer.paidExtraByMonth.set(monthKey, current + amount);
+    } else {
+      customer.paidExtra = (customer.paidExtra || 0) + amount;
+    }
+
     customer.paymentHistory.push({ amount, note: note || '', paidAt: new Date() });
     await customer.save();
     res.json({ success: true, data: customer });
