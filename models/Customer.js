@@ -60,31 +60,49 @@ CustomerSchema.virtual('calc').get(function () {
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
   
-  // Use Map data if available, fallback to legacy fields
-  const raw = this.tiffinsByMonth.get(monthKey) || this.rawStr || '';
-  const monthExtra = this.paidExtraByMonth.get(monthKey) || 0;
-  const legacyExtra = this.paidExtra || 0;
-
-  const dates = parseRawStr(raw);
-  const total = dates.length;
-  const paidDates = dates.filter(d => d.paid).length;
+  // 1. Current Month Stats
+  const currentRaw = this.tiffinsByMonth.get(monthKey) || (this.rawStr || '');
+  const currentMonthExtra = this.paidExtraByMonth.get(monthKey) || 0;
+  const currentDates = parseRawStr(currentRaw);
   
+  const total = currentDates.length;
+  const paidDates = currentDates.filter(d => d.paid).length;
   const totalAmt = total * this.rate;
-  // Collection = (Marked Paid Dates) + (Lump sum payment for this month) + (Old legacy balance)
-  const paidAmt = (paidDates * this.rate) + monthExtra + legacyExtra;
+  const paidAmt = (paidDates * this.rate) + currentMonthExtra + (this.paidExtra || 0);
   const dueAmt = Math.max(0, totalAmt - paidAmt);
+  const status = dueAmt === 0 ? 'paid' : paidAmt > 0 ? 'partial' : 'due';
 
-  // Calculate TOTAL BALANCE across ALL history
-  let lifetimeDue = 0;
+  // 2. Lifetime Stats (Accumulate all months)
+  let lifetimeBill = 0;
+  let lifetimePaid = (this.paidExtra || 0); // Start with legacy lump sum
+  
+  // Track which months we've processed to avoid double counting if current month is in both legacy and Map
+  const processedKeys = new Set();
+
   this.tiffinsByMonth.forEach((str, key) => {
     const dts = parseRawStr(str);
-    const bill = dts.length * this.rate;
-    const paid = (dts.filter(d => d.paid).length * this.rate) + (this.paidExtraByMonth.get(key) || 0);
-    lifetimeDue += Math.max(0, bill - paid);
+    lifetimeBill += dts.length * this.rate;
+    lifetimePaid += (dts.filter(d => d.paid).length * this.rate) + (this.paidExtraByMonth.get(key) || 0);
+    processedKeys.add(key);
   });
 
-  const status = dueAmt === 0 ? 'paid' : paidAmt > 0 ? 'partial' : 'due';
-  return { total, paidDates, unpaidDates: total - paidDates, totalAmt, paidAmt, dueAmt, lifetimeDue, status, dates };
+  // Add legacy current month data only if it wasn't already in the Map
+  if (!processedKeys.has(monthKey) && this.rawStr) {
+    const dts = parseRawStr(this.rawStr);
+    lifetimeBill += dts.length * this.rate;
+    lifetimePaid += (dts.filter(d => d.paid).length * this.rate);
+  }
+
+  return { 
+    total, 
+    totalAmt, 
+    paidAmt, 
+    dueAmt, 
+    status, 
+    lifetimeBill, 
+    lifetimePaid, 
+    lifetimeDue: Math.max(0, lifetimeBill - lifetimePaid) 
+  };
 });
 
 function parseRawStr(str) {

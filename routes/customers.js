@@ -120,12 +120,17 @@ router.post('/:id/adddate', async (req, res) => {
 router.get('/stats/summary', async (req, res) => {
   try {
     const customers = await Customer.find({ isActive: true });
-    let totalTiffins = 0, totalRevenue = 0, totalCollected = 0, paidCount = 0, dueCount = 0;
+    let totalTiffins = 0;
+    let totalRevenue = 0; // Lifetime Bill
+    let totalCollected = 0; // Lifetime Collection
+    let paidCount = 0, dueCount = 0;
+
     customers.forEach(c => {
       const cl = c.calc;
-      totalTiffins += cl.total;
-      totalRevenue += cl.totalAmt;
-      totalCollected += cl.paidAmt;
+      totalTiffins   += cl.total;
+      totalRevenue   += cl.lifetimeBill;
+      totalCollected += cl.lifetimePaid;
+      
       if (cl.status === 'paid') paidCount++;
       else dueCount++;
     });
@@ -136,7 +141,7 @@ router.get('/stats/summary', async (req, res) => {
         totalTiffins,
         totalRevenue,
         totalCollected,
-        totalDue: totalRevenue - totalCollected,
+        totalDue: Math.max(0, totalRevenue - totalCollected),
         paidCount,
         dueCount,
       }
