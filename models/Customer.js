@@ -61,7 +61,7 @@ CustomerSchema.virtual('calc').get(function () {
   const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
   
   // 1. Current Month Stats
-  const currentRaw = this.tiffinsByMonth.get(monthKey) || (this.rawStr || '');
+  const currentRaw = this.tiffinsByMonth.get(monthKey) || '';
   const currentMonthExtra = this.paidExtraByMonth.get(monthKey) || 0;
   const currentDates = parseRawStr(currentRaw);
   
